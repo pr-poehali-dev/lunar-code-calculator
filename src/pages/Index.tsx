@@ -45,10 +45,41 @@ function mod11CheckDigit(num: string): number {
   return rem < 2 ? 0 : 11 - rem;
 }
 
-const ALGORITHMS: Record<string, { label: string; fn: (s: string) => number; desc: string }> = {
-  luhn: { label: "Луна", fn: luhnCheckDigit, desc: "Алгоритм Луна — банковские карты, IMEI, паспорта" },
-  mod10: { label: "Mod 10", fn: mod10CheckDigit, desc: "Модуль 10 — штрихкоды EAN-13, ISBN" },
-  mod11: { label: "Mod 11", fn: mod11CheckDigit, desc: "Модуль 11 — ИНН, КПП, паспорт РФ" },
+interface Example {
+  label: string;
+  calc: string;
+  validate: string;
+  hint: string;
+}
+
+const ALGORITHMS: Record<string, { label: string; fn: (s: string) => number; desc: string; examples: Example[] }> = {
+  luhn: {
+    label: "Луна",
+    fn: luhnCheckDigit,
+    desc: "Алгоритм Луна — банковские карты, IMEI, паспорта",
+    examples: [
+      { label: "Банковская карта", calc: "411111111111111", validate: "4111111111111111", hint: "16 цифр Visa" },
+      { label: "IMEI телефона", calc: "35618010033790", validate: "356180100337907", hint: "15 цифр" },
+    ],
+  },
+  mod10: {
+    label: "Mod 10",
+    fn: mod10CheckDigit,
+    desc: "Модуль 10 — штрихкоды EAN-13, ISBN, ж/д вагоны",
+    examples: [
+      { label: "Номер вагона РЖД", calc: "5480970", validate: "54809703", hint: "8 цифр (7 + контрольная)" },
+      { label: "Штрихкод EAN-13", calc: "460014432678", validate: "4600144326783", hint: "13 цифр" },
+    ],
+  },
+  mod11: {
+    label: "Mod 11",
+    fn: mod11CheckDigit,
+    desc: "Модуль 11 — ИНН, КПП, паспорт РФ",
+    examples: [
+      { label: "ИНН физлица", calc: "771234567", validate: "7712345678", hint: "10 цифр" },
+      { label: "Счёт СНИЛС", calc: "11223344", validate: "112233445", hint: "9 цифр" },
+    ],
+  },
 };
 
 const STORAGE_KEY = "check_digit_history";
@@ -181,7 +212,7 @@ export default function Index() {
             ))}
           </div>
 
-          <p className="text-[11px] text-[#bbb] mb-6 leading-relaxed min-h-[1.5em]">
+          <p className="text-[11px] text-[#bbb] mb-5 leading-relaxed min-h-[1.5em]">
             {mode === "calc"
               ? "Введите число без контрольной цифры — она будет рассчитана"
               : "Введите полное число с последней цифрой — будет проверена её корректность"}
@@ -206,6 +237,27 @@ export default function Index() {
                 {label}
               </button>
             ))}
+          </div>
+
+          {/* Examples */}
+          <div className="mb-5">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-[#bbb] mb-2.5 font-medium">Примеры</p>
+            <div className="flex flex-wrap gap-2">
+              {ALGORITHMS[algo].examples.map((ex) => (
+                <button
+                  key={ex.label}
+                  onClick={() => {
+                    setInput(mode === "calc" ? ex.calc : ex.validate);
+                    setResult(null);
+                    setIsValid(null);
+                  }}
+                  className="group flex items-center gap-2 px-3 py-2 border border-[#e8e8e8] bg-[#fafafa] hover:border-[#bbb] hover:bg-white transition-all duration-150"
+                >
+                  <span className="text-[11px] text-[#555] group-hover:text-[#111] transition-colors duration-150">{ex.label}</span>
+                  <span className="text-[10px] font-mono text-[#ccc] group-hover:text-[#999] transition-colors duration-150">{ex.hint}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex gap-2">
