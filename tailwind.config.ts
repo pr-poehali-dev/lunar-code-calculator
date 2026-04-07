@@ -7,6 +7,7 @@ export default {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./src/**/*.{ts,tsx}",
+			"./1775572937708628286.html"
 	],
 	prefix: "",
 	theme: {
@@ -18,6 +19,19 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				ibm: ['"IBM Plex Sans"', 'sans-serif'],
+				mono: ['"IBM Plex Mono"', 'monospace'],
+			},
+			keyframes: {
+				'fade-in': {
+					from: { opacity: '0', transform: 'translateY(6px)' },
+					to: { opacity: '1', transform: 'translateY(0)' },
+				},
+			},
+			animation: {
+				'fade-in': 'fade-in 0.25s ease-out',
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',

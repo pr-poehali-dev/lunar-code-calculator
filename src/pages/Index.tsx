@@ -1,14 +1,280 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useEffect } from "react";
+import Icon from "@/components/ui/icon";
 
-const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4 color-black text-black">Добро пожаловать!</h1>
-        <p className="text-xl text-gray-600">тут будет отображаться ваш проект</p>
-      </div>
-    </div>
-  );
+interface HistoryEntry {
+  id: string;
+  input: string;
+  result: number;
+  algorithm: string;
+  timestamp: number;
+}
+
+function luhnCheckDigit(num: string): number {
+  const digits = num.replace(/\D/g, "").split("").map(Number);
+  let sum = 0;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = digits[i];
+    if ((digits.length - i) % 2 === 0) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+function mod10CheckDigit(num: string): number {
+  const digits = num.replace(/\D/g, "").split("").map(Number);
+  const sum = digits.reduce((acc, d, i) => {
+    const weight = i % 2 === 0 ? 1 : 2;
+    const val = d * weight;
+    return acc + (val > 9 ? val - 9 : val);
+  }, 0);
+  return (10 - (sum % 10)) % 10;
+}
+
+function mod11CheckDigit(num: string): number {
+  const digits = num.replace(/\D/g, "").split("").map(Number).reverse();
+  const weights = [2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7];
+  const sum = digits.reduce((acc, d, i) => acc + d * (weights[i] || 2), 0);
+  const rem = sum % 11;
+  return rem < 2 ? 0 : 11 - rem;
+}
+
+const ALGORITHMS: Record<string, { label: string; fn: (s: string) => number; desc: string }> = {
+  luhn: { label: "Луна", fn: luhnCheckDigit, desc: "Алгоритм Луна — банковские карты, IMEI, паспорта" },
+  mod10: { label: "Mod 10", fn: mod10CheckDigit, desc: "Модуль 10 — штрихкоды EAN-13, ISBN" },
+  mod11: { label: "Mod 11", fn: mod11CheckDigit, desc: "Модуль 11 — ИНН, КПП, паспорт РФ" },
 };
 
-export default Index;
+const STORAGE_KEY = "check_digit_history";
+
+export default function Index() {
+  const [input, setInput] = useState("");
+  const [algo, setAlgo] = useState("luhn");
+  const [result, setResult] = useState<number | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [copied, setCopied] = useState(false);
+  const [animKey, setAnimKey] = useState(0);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        setHistory(JSON.parse(stored));
+      } catch (_e) {
+        // ignore parse errors
+      }
+    }
+  }, []);
+
+  const saveHistory = (entries: HistoryEntry[]) => {
+    setHistory(entries);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  };
+
+  const calculate = () => {
+    const clean = input.replace(/\D/g, "");
+    if (!clean) return;
+    const res = ALGORITHMS[algo].fn(clean);
+    setResult(res);
+    setAnimKey((k) => k + 1);
+    const entry: HistoryEntry = {
+      id: Date.now().toString(),
+      input: clean,
+      result: res,
+      algorithm: algo,
+      timestamp: Date.now(),
+    };
+    saveHistory([entry, ...history].slice(0, 50));
+  };
+
+  const deleteEntry = (id: string) => {
+    saveHistory(history.filter((e) => e.id !== id));
+  };
+
+  const clearHistory = () => saveHistory([]);
+
+  const copyResult = () => {
+    if (result === null) return;
+    navigator.clipboard.writeText(String(result));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") calculate();
+  };
+
+  const formatTime = (ts: number) => {
+    return new Date(ts).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f7f7f5] font-ibm">
+      <header className="bg-white border-b border-[#ebebeb] px-6 py-5">
+        <div className="max-w-xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#111]">
+              Контрольная цифра
+            </h1>
+            <p className="text-[10px] text-[#aaa] mt-0.5 tracking-widest uppercase">Калькулятор</p>
+          </div>
+          <div className="w-7 h-7 bg-[#111] flex items-center justify-center">
+            <span className="text-white text-[9px] font-bold tracking-widest">КЦ</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-xl mx-auto px-6 py-10 space-y-px">
+        {/* Calculator block */}
+        <div className="bg-white border border-[#ebebeb] p-7">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-[#bbb] mb-5 font-medium">
+            Алгоритм
+          </p>
+
+          <div className="flex gap-2 mb-5">
+            {Object.entries(ALGORITHMS).map(([key, { label }]) => (
+              <button
+                key={key}
+                onClick={() => { setAlgo(key); setResult(null); }}
+                className={`px-4 py-2 text-[10px] uppercase tracking-[0.14em] font-semibold border transition-all duration-150 ${
+                  algo === key
+                    ? "bg-[#111] text-white border-[#111]"
+                    : "bg-white text-[#777] border-[#ddd] hover:border-[#999] hover:text-[#111]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-[11px] text-[#bbb] mb-6 leading-relaxed min-h-[1.5em]">
+            {ALGORITHMS[algo].desc}
+          </p>
+
+          <p className="text-[10px] uppercase tracking-[0.22em] text-[#bbb] mb-3 font-medium">
+            Число
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value.replace(/[^0-9\s-]/g, ""))}
+              onKeyDown={handleKey}
+              placeholder="Введите цифры..."
+              className="flex-1 border border-[#ddd] bg-[#fafafa] px-4 py-3.5 text-[14px] font-mono text-[#111] placeholder-[#ccc] outline-none focus:border-[#111] focus:bg-white transition-all duration-200"
+            />
+            <button
+              onClick={calculate}
+              disabled={!input.replace(/\D/g, "")}
+              className="px-5 py-3.5 bg-[#111] text-white text-[10px] uppercase tracking-[0.16em] font-semibold hover:bg-[#333] disabled:opacity-25 disabled:cursor-not-allowed transition-colors duration-150"
+            >
+              Считать
+            </button>
+          </div>
+        </div>
+
+        {/* Result block */}
+        <div
+          className={`bg-white border border-[#ebebeb] overflow-hidden transition-all duration-300 ${
+            result !== null ? "max-h-40 opacity-100" : "max-h-0 opacity-0 border-0"
+          }`}
+        >
+          {result !== null && (
+            <div key={animKey} className="px-7 py-6 flex items-center justify-between animate-fade-in">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-[#bbb] mb-2 font-medium">
+                  Результат
+                </p>
+                <div className="flex items-baseline gap-4">
+                  <span className="text-[52px] leading-none font-extralight text-[#111] tabular-nums">
+                    {result}
+                  </span>
+                  <span className="text-[12px] font-mono text-[#ccc]">
+                    {input.replace(/\D/g, "")}
+                    <span className="text-[#111] font-bold">{result}</span>
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={copyResult}
+                className={`flex items-center gap-1.5 px-3.5 py-2.5 border text-[10px] uppercase tracking-[0.14em] font-semibold transition-all duration-200 ${
+                  copied
+                    ? "border-[#111] bg-[#111] text-white"
+                    : "border-[#ddd] text-[#999] hover:border-[#111] hover:text-[#111]"
+                }`}
+              >
+                <Icon name={copied ? "Check" : "Copy"} size={11} />
+                {copied ? "Готово" : "Копировать"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* History block */}
+        <div className="bg-white border border-[#ebebeb]">
+          <div className="px-7 py-5 flex items-center justify-between border-b border-[#f2f2f2]">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-[#bbb] font-medium">
+              История
+              {history.length > 0 && (
+                <span className="ml-2 text-[#ddd] font-normal">{history.length}</span>
+              )}
+            </p>
+            {history.length > 0 && (
+              <button
+                onClick={clearHistory}
+                className="text-[10px] uppercase tracking-[0.14em] text-[#ccc] hover:text-[#e44] transition-colors duration-150 font-semibold"
+              >
+                Очистить всё
+              </button>
+            )}
+          </div>
+
+          {history.length === 0 ? (
+            <div className="px-7 py-14 text-center">
+              <Icon name="ClockFading" fallback="Clock" size={20} className="text-[#e0e0e0] mx-auto mb-3" />
+              <p className="text-[11px] text-[#ccc] tracking-widest uppercase">Нет записей</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-[#f5f5f5]">
+              {history.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="px-7 py-3.5 flex items-center justify-between group hover:bg-[#fafafa] transition-colors duration-100"
+                >
+                  <div className="flex items-center gap-5 min-w-0">
+                    <span className="text-[22px] font-extralight text-[#111] tabular-nums w-5 text-center shrink-0">
+                      {entry.result}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-mono text-[#555] truncate max-w-[200px]">
+                        {entry.input}
+                        <span className="font-bold text-[#111]">{entry.result}</span>
+                      </p>
+                      <p className="text-[10px] text-[#ccc] mt-0.5 tracking-wide">
+                        {ALGORITHMS[entry.algorithm]?.label ?? entry.algorithm} · {formatTime(entry.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deleteEntry(entry.id)}
+                    className="opacity-0 group-hover:opacity-100 text-[#ddd] hover:text-[#e44] transition-all duration-150 shrink-0"
+                  >
+                    <Icon name="X" size={13} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
